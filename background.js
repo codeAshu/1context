@@ -6,116 +6,193 @@ importScripts('lib/memory.js', 'lib/openai.js');
 let memorySystem = null;
 let openaiClient = null;
 let isEnabled = true;
+let isInitialized = false;
 
 // Initialize systems
 async function initialize() {
-  memorySystem = new MemorySystem();
-  await memorySystem.init();
+  try {
+    console.log('Prompt Broadcaster: Initializing...');
 
-  // Load API key from storage
-  const result = await chrome.storage.local.get(['openaiApiKey', 'isEnabled']);
-  openaiClient = new OpenAIClient(result.openaiApiKey || '');
-  isEnabled = result.isEnabled !== false; // Default to true
+    memorySystem = new MemorySystem();
+    await memorySystem.init();
+    console.log('Prompt Broadcaster: IndexedDB initialized');
 
-  console.log('Prompt Broadcaster initialized');
+    // Load API key from storage
+    const result = await chrome.storage.local.get(['openaiApiKey', 'isEnabled']);
+    openaiClient = new OpenAIClient(result.openaiApiKey || '');
+    isEnabled = result.isEnabled !== false; // Default to true
+    isInitialized = true;
+
+    console.log('Prompt Broadcaster: Fully initialized', {
+      hasApiKey: !!result.openaiApiKey,
+      isEnabled
+    });
+  } catch (error) {
+    console.error('Prompt Broadcaster: Initialization failed', error);
+    // Create fallback client even if DB fails
+    openaiClient = new OpenAIClient('');
+    isInitialized = false;
+  }
 }
 
-initialize();
+// Wait for initialization
+const initPromise = initialize();
+
+// Helper to ensure initialization before handling messages
+async function ensureInitialized() {
+  await initPromise;
+  return isInitialized;
+}
 
 // Listen for messages from content scripts
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.type === 'BROADCAST_PROMPT') {
-    handleBroadcast(message.prompt, sender.tab).then(sendResponse);
-    return true; // Keep channel open for async response
-  }
+  console.log('Prompt Broadcaster: Received message', message.type);
 
-  if (message.type === 'GET_PENDING_PROMPT') {
-    // Gemini/Claude tabs asking for their prompt
-    chrome.storage.local.get(['pendingPrompt'], (result) => {
-      sendResponse({ prompt: result.pendingPrompt || null });
-    });
-    return true;
-  }
+  // Handle each message type with proper async handling
+  (async () => {
+    try {
+      await ensureInitialized();
 
-  if (message.type === 'CLEAR_PENDING_PROMPT') {
-    chrome.storage.local.remove(['pendingPrompt']);
-    sendResponse({ success: true });
-    return true;
-  }
+      switch (message.type) {
+        case 'BROADCAST_PROMPT': {
+          const result = await handleBroadcast(message.prompt, sender.tab);
+          sendResponse(result);
+          break;
+        }
 
-  if (message.type === 'SET_API_KEY') {
-    openaiClient.setApiKey(message.apiKey);
-    chrome.storage.local.set({ openaiApiKey: message.apiKey });
-    sendResponse({ success: true });
-    return true;
-  }
+        case 'GET_PENDING_PROMPT': {
+          const result = await chrome.storage.local.get(['pendingPrompt']);
+          sendResponse({ prompt: result.pendingPrompt || null });
+          break;
+        }
 
-  if (message.type === 'SET_ENABLED') {
-    isEnabled = message.enabled;
-    chrome.storage.local.set({ isEnabled: message.enabled });
-    sendResponse({ success: true });
-    return true;
-  }
+        case 'CLEAR_PENDING_PROMPT': {
+          await chrome.storage.local.remove(['pendingPrompt']);
+          sendResponse({ success: true });
+          break;
+        }
 
-  if (message.type === 'GET_STATUS') {
-    chrome.storage.local.get(['openaiApiKey', 'isEnabled'], async (result) => {
-      const convCount = await memorySystem.getConversationCount();
-      const memories = await memorySystem.getMemories(10);
-      sendResponse({
-        hasApiKey: !!result.openaiApiKey,
-        isEnabled: result.isEnabled !== false,
-        conversationCount: convCount,
-        memoryCount: memories.length
-      });
-    });
-    return true;
-  }
+        case 'SET_API_KEY': {
+          console.log('Prompt Broadcaster: Saving API key');
+          await chrome.storage.local.set({ openaiApiKey: message.apiKey });
+          if (openaiClient) {
+            openaiClient.setApiKey(message.apiKey);
+          }
+          sendResponse({ success: true });
+          break;
+        }
 
-  if (message.type === 'GET_MEMORIES') {
-    memorySystem.getMemories(20).then(sendResponse);
-    return true;
-  }
+        case 'SET_ENABLED': {
+          isEnabled = message.enabled;
+          await chrome.storage.local.set({ isEnabled: message.enabled });
+          sendResponse({ success: true });
+          break;
+        }
 
-  if (message.type === 'GET_CONVERSATIONS') {
-    memorySystem.getRecentConversations(50).then(sendResponse);
-    return true;
-  }
+        case 'GET_STATUS': {
+          const stored = await chrome.storage.local.get(['openaiApiKey', 'isEnabled']);
+          let convCount = 0;
+          let memCount = 0;
 
-  if (message.type === 'CLEAR_MEMORY') {
-    memorySystem.clearAll().then(() => sendResponse({ success: true }));
-    return true;
-  }
+          if (memorySystem && isInitialized) {
+            try {
+              convCount = await memorySystem.getConversationCount();
+              const memories = await memorySystem.getMemories(10);
+              memCount = memories.length;
+            } catch (e) {
+              console.error('Error getting counts:', e);
+            }
+          }
 
-  if (message.type === 'IMPORT_MEMORY') {
-    memorySystem.importData(message.data).then(() => sendResponse({ success: true }));
-    return true;
-  }
+          sendResponse({
+            hasApiKey: !!stored.openaiApiKey,
+            isEnabled: stored.isEnabled !== false,
+            conversationCount: convCount,
+            memoryCount: memCount,
+            initialized: isInitialized
+          });
+          break;
+        }
+
+        case 'GET_MEMORIES': {
+          if (memorySystem && isInitialized) {
+            const memories = await memorySystem.getMemories(20);
+            sendResponse(memories);
+          } else {
+            sendResponse([]);
+          }
+          break;
+        }
+
+        case 'GET_CONVERSATIONS': {
+          if (memorySystem && isInitialized) {
+            const convs = await memorySystem.getRecentConversations(50);
+            sendResponse(convs);
+          } else {
+            sendResponse([]);
+          }
+          break;
+        }
+
+        case 'CLEAR_MEMORY': {
+          if (memorySystem && isInitialized) {
+            await memorySystem.clearAll();
+          }
+          sendResponse({ success: true });
+          break;
+        }
+
+        case 'IMPORT_MEMORY': {
+          if (memorySystem && isInitialized) {
+            await memorySystem.importData(message.data);
+          }
+          sendResponse({ success: true });
+          break;
+        }
+
+        default:
+          console.warn('Unknown message type:', message.type);
+          sendResponse({ error: 'Unknown message type' });
+      }
+    } catch (error) {
+      console.error('Prompt Broadcaster: Message handler error', error);
+      sendResponse({ error: error.message });
+    }
+  })();
+
+  return true; // Keep channel open for async response
 });
 
 async function handleBroadcast(originalPrompt, sourceTab) {
+  console.log('Prompt Broadcaster: Broadcasting prompt', originalPrompt.substring(0, 50) + '...');
+
   if (!isEnabled) {
+    console.log('Prompt Broadcaster: Disabled, skipping');
     return { improved: originalPrompt, broadcasted: false };
   }
 
   try {
-    // Get memory context
-    const memoryContext = await memorySystem.getMemoryContext();
+    let improvedPrompt = originalPrompt;
 
-    // Improve the prompt
-    const improvedPrompt = await openaiClient.improvePrompt(originalPrompt, memoryContext);
+    // Get memory context and improve prompt if possible
+    if (memorySystem && isInitialized && openaiClient) {
+      const memoryContext = await memorySystem.getMemoryContext();
+      improvedPrompt = await openaiClient.improvePrompt(originalPrompt, memoryContext);
 
-    // Save conversation
-    await memorySystem.saveConversation(originalPrompt);
+      // Save conversation
+      await memorySystem.saveConversation(originalPrompt);
 
-    // Check if we need to distill memories
-    if (await memorySystem.needsDistillation()) {
-      distillMemoriesInBackground();
+      // Check if we need to distill memories
+      if (await memorySystem.needsDistillation()) {
+        distillMemoriesInBackground();
+      }
     }
 
     // Store the improved prompt for Gemini/Claude tabs
     await chrome.storage.local.set({ pendingPrompt: improvedPrompt });
 
     // Open Gemini and Claude tabs
+    console.log('Prompt Broadcaster: Opening Gemini and Claude tabs');
     await Promise.all([
       chrome.tabs.create({
         url: 'https://gemini.google.com/app',
@@ -127,6 +204,7 @@ async function handleBroadcast(originalPrompt, sourceTab) {
       })
     ]);
 
+    console.log('Prompt Broadcaster: Broadcast complete');
     return { improved: improvedPrompt, broadcasted: true };
   } catch (error) {
     console.error('Broadcast error:', error);
@@ -141,7 +219,6 @@ async function distillMemoriesInBackground() {
 
     if (summary) {
       await memorySystem.saveMemory(summary);
-      // Clean up old conversations to save space
       await memorySystem.clearOldConversations(50);
       console.log('Memory distillation complete');
     }
@@ -150,10 +227,10 @@ async function distillMemoriesInBackground() {
   }
 }
 
-// Re-initialize when storage changes (e.g., API key updated)
+// Re-initialize when storage changes
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local') {
-    if (changes.openaiApiKey) {
+    if (changes.openaiApiKey && openaiClient) {
       openaiClient.setApiKey(changes.openaiApiKey.newValue || '');
     }
     if (changes.isEnabled !== undefined) {
