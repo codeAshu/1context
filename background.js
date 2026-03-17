@@ -88,7 +88,7 @@ class PromptBroadcaster {
     }
   }
 
-  async broadcastSplit(originalPrompt, layout = 'horizontal') {
+  async broadcastSplit(originalPrompt, layout = 'grid') {
     try {
       const improvedPrompt = await this.improveAndSave(originalPrompt);
       await chrome.storage.local.set({ pendingPrompt: improvedPrompt });
