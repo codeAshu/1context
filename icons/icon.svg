@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#6366f1"/>
+      <stop offset="100%" style="stop-color:#8b5cf6"/>
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f0abfc"/>
+      <stop offset="100%" style="stop-color:#c084fc"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background circle -->
+  <circle cx="64" cy="64" r="60" fill="url(#bgGrad)"/>
+
+  <!-- Broadcast waves (representing "think everywhere") -->
+  <path d="M85 40 Q100 64 85 88" stroke="url(#accentGrad)" stroke-width="4" fill="none" opacity="0.6"/>
+  <path d="M95 32 Q115 64 95 96" stroke="url(#accentGrad)" stroke-width="3" fill="none" opacity="0.4"/>
+  <path d="M105 24 Q130 64 105 104" stroke="url(#accentGrad)" stroke-width="2" fill="none" opacity="0.2"/>
+
+  <!-- The "1" - bold, modern -->
+  <text x="38" y="90" font-family="system-ui, -apple-system, sans-serif" font-size="72" font-weight="700" fill="white">1</text>
+
+  <!-- Small dot representing the context/origin point -->
+  <circle cx="75" cy="64" r="6" fill="white" opacity="0.9"/>
+</svg>

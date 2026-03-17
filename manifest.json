@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Prompt Broadcaster",
-  "version": "2.0.0",
-  "description": "Broadcast prompts to ChatGPT, Gemini, and Claude with AI-powered improvement and memory",
+  "name": "1Context",
+  "version": "1.0.0",
+  "description": "Write once. Think everywhere. Send prompts to ChatGPT, Claude, and Gemini with memory.",
   "permissions": [
     "storage",
     "tabs",
@@ -41,12 +41,18 @@
     }
   ],
   "action": {
-    "default_title": "Open Prompt Broadcaster",
+    "default_title": "Open 1Context",
     "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
       "128": "icons/icon128.png"
     }
   },
   "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
   "commands": {
@@ -55,7 +61,7 @@
         "default": "Ctrl+Shift+B",
         "mac": "Command+Shift+B"
       },
-      "description": "Open Prompt Broadcaster"
+      "description": "Open 1Context"
     },
     "open_side_panel": {
       "suggested_key": {

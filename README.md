@@ -1,6 +1,8 @@
-# Prompt Broadcaster
+# 1Context
 
-A Chrome extension that broadcasts your prompts to ChatGPT, Gemini, and Claude simultaneously with AI-powered prompt improvement and local memory.
+**Write once. Think everywhere.**
+
+A Chrome extension that sends your prompts to ChatGPT, Claude, and Gemini simultaneously — with intelligent memory that learns your context.
 
 ## Features
 
@@ -9,21 +11,21 @@ A Chrome extension that broadcasts your prompts to ChatGPT, Gemini, and Claude s
 - **AI-powered prompt improvement**: Uses GPT-4o-mini to enhance your prompts
 - **Local memory system**: Tracks all your conversations using IndexedDB
 - **Memory distillation**: Automatically summarizes patterns from your history
-- **Side panel UI**: Convenient side panel for entering prompts
-- **Export/Import**: Save and load your memory as JSON files
+- **Own your context**: Export, import, and control your AI memory
+- **Privacy first**: All data stays in your browser
 
 ## Installation
 
 1. Clone this repository:
    ```bash
-   git clone https://github.com/codeAshu/prompt-broadcaster.git
+   git clone https://github.com/video-db/1context.git
    ```
 
 2. Open Chrome and navigate to `chrome://extensions`
 
 3. Enable **Developer mode** (toggle in top right)
 
-4. Click **Load unpacked** and select the `prompt-broadcaster` folder
+4. Click **Load unpacked** and select the `1context` folder
 
 5. Click the extension icon to open the side panel
 
@@ -70,28 +72,6 @@ Click the gear icon in the side panel:
 - **Export/Import**: Backup or restore your memory as JSON
 - **Clear All**: Reset all stored data
 
-## File Structure
-
-```
-prompt-broadcaster/
-├── manifest.json           # Extension configuration (v2.0)
-├── background.js           # Service worker for API and window management
-├── sidepanel/
-│   ├── sidepanel.html     # Side panel UI
-│   ├── sidepanel.js       # Side panel logic
-│   └── sidepanel.css      # Side panel styles
-├── content/
-│   ├── chatgpt.js         # ChatGPT content script
-│   ├── gemini.js          # Gemini content script
-│   └── claude.js          # Claude content script
-├── lib/
-│   ├── memory.js          # IndexedDB memory system
-│   └── openai.js          # OpenAI API client
-├── popup/                  # Legacy popup (settings)
-└── icons/
-    └── icon128.png        # Extension icon
-```
-
 ## How It Works
 
 1. **Input**: Enter prompt in side panel or ChatGPT
@@ -113,21 +93,6 @@ prompt-broadcaster/
 
 - Chrome browser (v114+ for side panel support)
 - OpenAI API key (for prompt improvement)
-
-## Troubleshooting
-
-### Extension not loading?
-1. Go to `chrome://extensions`
-2. Check for errors (red "Errors" button)
-3. Click "Service Worker" to see console logs
-
-### Prompts not submitting?
-- UI selectors may have changed. Check console for errors.
-- Try refreshing the AI chat page.
-
-### API key not saving?
-- Open DevTools on the side panel
-- Check console for storage errors
 
 ## License
 
