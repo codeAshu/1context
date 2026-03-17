@@ -1,15 +1,14 @@
-// ChatGPT content script - intercepts submissions and broadcasts to other models
+// ChatGPT content script - intercepts submissions and receives pending prompts
 
 (function() {
   'use strict';
 
-  console.log('Prompt Broadcaster: ChatGPT content script loaded');
+  console.log('1Context: ChatGPT content script loaded');
 
   let isProcessing = false;
 
   function getTextarea() {
     // ChatGPT uses a contenteditable div with id="prompt-textarea"
-    // Try multiple selectors as UI may change
     const selectors = [
       '#prompt-textarea',
       'div[contenteditable="true"][id="prompt-textarea"]',
@@ -34,7 +33,7 @@
       'button[aria-label="Send prompt"]',
       'button[aria-label="Send message"]',
       'form button[type="submit"]',
-      'button:has(svg[viewBox="0 0 32 32"])'  // Arrow icon button
+      'button:has(svg[viewBox="0 0 32 32"])'
     ];
 
     for (const selector of selectors) {
@@ -42,7 +41,6 @@
         const el = document.querySelector(selector);
         if (el) return el;
       } catch (e) {
-        // :has() might not be supported everywhere
         continue;
       }
     }
@@ -66,7 +64,6 @@
 
   function getPromptText(element) {
     if (!element) return '';
-    // Handle both textarea and contenteditable
     const text = element.value || element.innerText || element.textContent || '';
     return text.trim();
   }
@@ -74,24 +71,20 @@
   function setPromptText(element, text) {
     if (!element) return false;
 
-    console.log('Prompt Broadcaster: Setting prompt text');
+    console.log('1Context: Setting prompt text');
 
     if (element.tagName === 'TEXTAREA') {
       element.value = text;
       element.dispatchEvent(new Event('input', { bubbles: true }));
     } else {
-      // Contenteditable div - need to simulate proper input
+      // Contenteditable div
       element.focus();
-
-      // Clear existing content
       element.innerHTML = '';
 
-      // Insert text as paragraph (ChatGPT expects this structure)
       const p = document.createElement('p');
       p.textContent = text;
       element.appendChild(p);
 
-      // Dispatch events to trigger React state updates
       element.dispatchEvent(new InputEvent('input', {
         bubbles: true,
         cancelable: true,
@@ -103,29 +96,102 @@
     return true;
   }
 
+  function waitForElement(selector, timeout = 5000) {
+    return new Promise((resolve, reject) => {
+      const element = document.querySelector(selector);
+      if (element) {
+        resolve(element);
+        return;
+      }
+
+      const observer = new MutationObserver((mutations, obs) => {
+        const el = document.querySelector(selector);
+        if (el) {
+          obs.disconnect();
+          resolve(el);
+        }
+      });
+
+      observer.observe(document.body, {
+        childList: true,
+        subtree: true
+      });
+
+      setTimeout(() => {
+        observer.disconnect();
+        reject(new Error('Element not found: ' + selector));
+      }, timeout);
+    });
+  }
+
+  // Check for pending prompt from side panel broadcast
+  async function checkForPendingPrompt() {
+    try {
+      const response = await chrome.runtime.sendMessage({ type: 'GET_PENDING_PROMPT' });
+
+      if (response && response.prompt) {
+        console.log('1Context: Found pending prompt for ChatGPT');
+
+        // Wait for ChatGPT UI to be ready
+        await waitForElement('#prompt-textarea, div[contenteditable="true"]', 10000);
+        await new Promise(resolve => setTimeout(resolve, 1500));
+
+        const textarea = getTextarea();
+        if (textarea) {
+          const success = setPromptText(textarea, response.prompt);
+
+          if (success) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            const sendButton = getSendButton();
+            if (sendButton && !sendButton.disabled) {
+              isProcessing = true; // Prevent interception
+              sendButton.click();
+              console.log('1Context: ChatGPT prompt submitted');
+              setTimeout(() => { isProcessing = false; }, 1000);
+            } else {
+              console.log('1Context: ChatGPT send button not ready, trying Enter key');
+              textarea.dispatchEvent(new KeyboardEvent('keydown', {
+                key: 'Enter',
+                code: 'Enter',
+                keyCode: 13,
+                which: 13,
+                bubbles: true
+              }));
+            }
+          }
+        }
+
+        // Clear the pending prompt
+        await chrome.runtime.sendMessage({ type: 'CLEAR_PENDING_PROMPT' });
+      }
+    } catch (error) {
+      console.error('1Context: ChatGPT pending prompt error', error);
+    }
+  }
+
   async function handleSubmit(event) {
-    console.log('Prompt Broadcaster: handleSubmit called, isProcessing:', isProcessing);
+    console.log('1Context: handleSubmit called, isProcessing:', isProcessing);
 
     if (isProcessing) {
-      console.log('Prompt Broadcaster: Already processing, skipping');
+      console.log('1Context: Already processing, skipping');
       return;
     }
 
     const textarea = getTextarea();
     if (!textarea) {
-      console.log('Prompt Broadcaster: No textarea found');
+      console.log('1Context: No textarea found');
       return;
     }
 
     const originalPrompt = getPromptText(textarea);
-    console.log('Prompt Broadcaster: Original prompt:', originalPrompt.substring(0, 50));
+    console.log('1Context: Original prompt:', originalPrompt.substring(0, 50));
 
     if (!originalPrompt) {
-      console.log('Prompt Broadcaster: Empty prompt, skipping');
+      console.log('1Context: Empty prompt, skipping');
       return;
     }
 
-    // Prevent default submission
     event.preventDefault();
     event.stopPropagation();
     event.stopImmediatePropagation();
@@ -133,46 +199,37 @@
     isProcessing = true;
 
     try {
-      console.log('Prompt Broadcaster: Sending to background...');
+      console.log('1Context: Sending to background...');
 
-      // Send to background script for improvement and broadcasting
       const response = await chrome.runtime.sendMessage({
         type: 'BROADCAST_PROMPT',
         prompt: originalPrompt
       });
 
-      console.log('Prompt Broadcaster: Got response', response);
+      console.log('1Context: Got response', response);
 
       if (response && response.improved) {
-        // Replace with improved prompt
         setPromptText(textarea, response.improved);
-
-        // Wait for UI to update
         await new Promise(resolve => setTimeout(resolve, 200));
 
-        // Now submit the improved prompt
         const sendButton = getSendButton();
-        console.log('Prompt Broadcaster: Send button found:', !!sendButton);
+        console.log('1Context: Send button found:', !!sendButton);
 
         if (sendButton && !sendButton.disabled) {
-          // Remove our listener temporarily to avoid recursion
           isProcessing = true;
           sendButton.click();
-          console.log('Prompt Broadcaster: Clicked send button');
+          console.log('1Context: Clicked send button');
         }
       } else if (response && response.error) {
-        console.error('Prompt Broadcaster: Error from background', response.error);
-        // Submit original on error
+        console.error('1Context: Error from background', response.error);
         const sendButton = getSendButton();
         if (sendButton) sendButton.click();
       }
     } catch (error) {
-      console.error('Prompt Broadcaster error:', error);
-      // On error, let original submission happen
+      console.error('1Context error:', error);
       const sendButton = getSendButton();
       if (sendButton) sendButton.click();
     } finally {
-      // Reset after a delay to allow the click to process
       setTimeout(() => {
         isProcessing = false;
       }, 500);
@@ -180,23 +237,20 @@
   }
 
   function setupInterception() {
-    console.log('Prompt Broadcaster: Setting up interception');
+    console.log('1Context: Setting up interception');
 
-    // Watch for send button clicks - use capture phase
     document.addEventListener('click', (event) => {
       if (isProcessing) return;
 
       const sendButton = getSendButton();
       if (!sendButton) return;
 
-      // Check if click is on send button or its children
       if (event.target === sendButton || sendButton.contains(event.target)) {
-        console.log('Prompt Broadcaster: Send button clicked');
+        console.log('1Context: Send button clicked');
         handleSubmit(event);
       }
     }, true);
 
-    // Watch for Enter key (without Shift) in the textarea
     document.addEventListener('keydown', (event) => {
       if (isProcessing) return;
       if (event.key !== 'Enter' || event.shiftKey) return;
@@ -204,27 +258,28 @@
       const textarea = getTextarea();
       if (!textarea) return;
 
-      // Check if we're typing in the textarea (or its children)
       if (textarea.contains(document.activeElement) || document.activeElement === textarea) {
-        console.log('Prompt Broadcaster: Enter pressed in textarea');
+        console.log('1Context: Enter pressed in textarea');
         handleSubmit(event);
       }
     }, true);
 
-    console.log('Prompt Broadcaster: Interception setup complete');
+    console.log('1Context: Interception setup complete');
   }
 
-  // Initialize when DOM is ready
   function init() {
-    console.log('Prompt Broadcaster: Initializing...');
+    console.log('1Context: Initializing...');
 
-    // Wait for ChatGPT UI to load
+    // Check for pending prompt first (from side panel broadcast)
+    setTimeout(checkForPendingPrompt, 2000);
+
+    // Set up interception for manual submissions
     const observer = new MutationObserver((mutations, obs) => {
       const textarea = getTextarea();
       if (textarea) {
         obs.disconnect();
         setupInterception();
-        console.log('Prompt Broadcaster: ChatGPT interception active');
+        console.log('1Context: ChatGPT interception active');
       }
     });
 
@@ -233,14 +288,13 @@
       subtree: true
     });
 
-    // Also check immediately
     const textarea = getTextarea();
     if (textarea) {
       observer.disconnect();
       setupInterception();
-      console.log('Prompt Broadcaster: ChatGPT interception active (immediate)');
+      console.log('1Context: ChatGPT interception active (immediate)');
     } else {
-      console.log('Prompt Broadcaster: Waiting for textarea to appear...');
+      console.log('1Context: Waiting for textarea to appear...');
     }
   }
 
