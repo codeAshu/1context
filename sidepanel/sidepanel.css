@@ -1,15 +1,42 @@
+/* Fonts: JetBrains Mono for headers, Inter for body */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600;700&display=swap');
+
 * {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
 }
 
+:root {
+  /* Bioluminescent Orange palette */
+  --orange-glow: #ff6b2c;
+  --orange-bright: #ff8c42;
+  --orange-laser: #ffaa33;
+  --orange-dim: #cc5520;
+
+  /* Dark theme */
+  --bg-deep: #0d0d12;
+  --bg-surface: #14141c;
+  --bg-elevated: #1c1c28;
+  --border: #2a2a3a;
+  --border-focus: #ff6b2c;
+
+  /* Text */
+  --text-primary: #f0f0f5;
+  --text-secondary: #8888a0;
+  --text-muted: #5a5a70;
+
+  /* Accent */
+  --accent: var(--orange-glow);
+  --accent-glow: 0 0 20px rgba(255, 107, 44, 0.4), 0 0 40px rgba(255, 107, 44, 0.2);
+}
+
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   font-size: 14px;
   line-height: 1.5;
-  color: #e0e0e0;
-  background: #1a1a2e;
+  color: var(--text-primary);
+  background: var(--bg-deep);
   min-height: 100vh;
 }
 
@@ -29,18 +56,18 @@ header {
 }
 
 header h1 {
-  font-size: 18px;
-  font-weight: 600;
-  background: linear-gradient(135deg, #00d4ff, #7c3aed);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--orange-glow);
+  text-shadow: var(--accent-glow);
+  letter-spacing: -0.5px;
 }
 
 .icon-btn {
   background: transparent;
   border: none;
-  color: #888;
+  color: var(--text-secondary);
   cursor: pointer;
   padding: 8px;
   border-radius: 8px;
@@ -48,8 +75,8 @@ header h1 {
 }
 
 .icon-btn:hover {
-  background: rgba(255,255,255,0.1);
-  color: #fff;
+  background: var(--bg-elevated);
+  color: var(--orange-glow);
 }
 
 /* Prompt Section */
@@ -67,23 +94,23 @@ header h1 {
   width: 100%;
   min-height: 120px;
   padding: 12px;
-  background: #16213e;
-  border: 1px solid #2a2a4a;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
   border-radius: 12px;
-  color: #fff;
+  color: var(--text-primary);
   font-size: 14px;
+  font-family: 'Inter', sans-serif;
   resize: vertical;
-  font-family: inherit;
 }
 
 #promptInput:focus {
   outline: none;
-  border-color: #7c3aed;
-  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.2);
+  border-color: var(--orange-glow);
+  box-shadow: 0 0 0 3px rgba(255, 107, 44, 0.15);
 }
 
 #promptInput::placeholder {
-  color: #666;
+  color: var(--text-muted);
 }
 
 .char-count {
@@ -91,7 +118,8 @@ header h1 {
   bottom: 8px;
   right: 12px;
   font-size: 11px;
-  color: #666;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-muted);
 }
 
 /* Buttons */
@@ -107,54 +135,68 @@ header h1 {
   justify-content: center;
   gap: 8px;
   padding: 12px 20px;
-  background: linear-gradient(135deg, #7c3aed, #00d4ff);
+  background: linear-gradient(135deg, var(--orange-glow), var(--orange-bright));
   border: none;
   border-radius: 10px;
-  color: white;
+  color: #0d0d12;
   font-size: 14px;
   font-weight: 600;
+  font-family: 'JetBrains Mono', monospace;
   cursor: pointer;
   transition: all 0.2s;
+  box-shadow: 0 2px 8px rgba(255, 107, 44, 0.3);
 }
 
 .btn-primary:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.4);
+  box-shadow: var(--accent-glow), 0 4px 16px rgba(255, 107, 44, 0.4);
 }
 
 .btn-primary:disabled {
   opacity: 0.5;
   cursor: not-allowed;
   transform: none;
+  box-shadow: none;
 }
 
 .btn-secondary {
   padding: 8px 16px;
-  background: #2a2a4a;
-  border: 1px solid #3a3a5a;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
   border-radius: 8px;
-  color: #e0e0e0;
+  color: var(--text-primary);
   font-size: 13px;
+  font-family: 'Inter', sans-serif;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .btn-secondary:hover {
-  background: #3a3a5a;
+  border-color: var(--orange-glow);
+  color: var(--orange-glow);
+}
+
+.btn-secondary.saved {
+  border-color: #22c55e;
+  color: #22c55e;
+  background: rgba(34, 197, 94, 0.1);
 }
 
 .btn-danger {
   padding: 8px 16px;
-  background: #dc2626;
-  border: none;
+  background: transparent;
+  border: 1px solid #dc2626;
   border-radius: 8px;
-  color: white;
+  color: #dc2626;
   font-size: 13px;
+  font-family: 'Inter', sans-serif;
   cursor: pointer;
+  transition: all 0.2s;
 }
 
 .btn-danger:hover {
-  background: #b91c1c;
+  background: #dc2626;
+  color: white;
 }
 
 /* Status Section */
@@ -163,8 +205,9 @@ header h1 {
   justify-content: space-between;
   align-items: center;
   padding: 12px;
-  background: #16213e;
+  background: var(--bg-surface);
   border-radius: 10px;
+  border: 1px solid var(--border);
 }
 
 .status-indicator {
@@ -178,52 +221,65 @@ header h1 {
   height: 8px;
   border-radius: 50%;
   background: #22c55e;
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.5);
 }
 
 .dot.processing {
-  background: #f59e0b;
-  animation: pulse 1s infinite;
+  background: var(--orange-glow);
+  box-shadow: 0 0 12px rgba(255, 107, 44, 0.6);
+  animation: pulse-orange 1s infinite;
 }
 
 .dot.error {
   background: #ef4444;
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.5);
 }
 
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+@keyframes pulse-orange {
+  0%, 100% {
+    opacity: 1;
+    box-shadow: 0 0 12px rgba(255, 107, 44, 0.6);
+  }
+  50% {
+    opacity: 0.6;
+    box-shadow: 0 0 20px rgba(255, 107, 44, 0.8);
+  }
 }
 
 .stats {
   display: flex;
   gap: 16px;
   font-size: 12px;
-  color: #888;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-secondary);
 }
 
 .stats strong {
-  color: #00d4ff;
+  color: var(--orange-glow);
 }
 
 /* Preview Section */
 .preview-section {
   padding: 12px;
-  background: #16213e;
+  background: var(--bg-surface);
   border-radius: 10px;
-  border-left: 3px solid #7c3aed;
+  border-left: 3px solid var(--orange-glow);
+  box-shadow: inset 4px 0 12px rgba(255, 107, 44, 0.1);
 }
 
 .preview-section h2 {
-  font-size: 12px;
-  color: #888;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--orange-glow);
   margin-bottom: 8px;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 1px;
 }
 
 .improved-prompt {
   font-size: 13px;
-  color: #e0e0e0;
+  color: var(--text-primary);
   white-space: pre-wrap;
   max-height: 150px;
   overflow-y: auto;
@@ -231,36 +287,117 @@ header h1 {
 
 /* Memory Section */
 .memory-section h2 {
-  font-size: 12px;
-  color: #888;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
   margin-bottom: 8px;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 1px;
 }
 
 .memory-list {
-  background: #16213e;
+  background: var(--bg-surface);
   border-radius: 10px;
   padding: 12px;
   max-height: 200px;
   overflow-y: auto;
+  border: 1px solid var(--border);
 }
 
 .memory-list .empty {
-  color: #666;
+  color: var(--text-muted);
   font-style: italic;
   text-align: center;
   font-size: 13px;
 }
 
 .memory-item {
-  padding: 8px 0;
-  border-bottom: 1px solid #2a2a4a;
-  font-size: 12px;
+  padding: 10px;
+  margin-bottom: 8px;
+  background: var(--bg-elevated);
+  border-radius: 8px;
+  border: 1px solid transparent;
+  transition: all 0.2s;
+  position: relative;
 }
 
 .memory-item:last-child {
-  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.memory-item:hover {
+  border-color: var(--border);
+}
+
+.memory-item-content {
+  font-size: 12px;
+  color: var(--text-primary);
+  line-height: 1.5;
+}
+
+.memory-item-content:focus {
+  outline: none;
+}
+
+.memory-item.editing {
+  border-color: var(--orange-glow);
+  box-shadow: 0 0 0 2px rgba(255, 107, 44, 0.15);
+}
+
+.memory-item.editing .memory-item-content {
+  background: var(--bg-surface);
+  padding: 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+}
+
+.memory-item-actions {
+  display: none;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.memory-item:hover .memory-item-actions,
+.memory-item.editing .memory-item-actions {
+  display: flex;
+}
+
+.memory-item-actions button {
+  padding: 4px 10px;
+  font-size: 11px;
+  font-family: 'JetBrains Mono', monospace;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-edit {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+
+.btn-edit:hover {
+  border-color: var(--orange-glow);
+  color: var(--orange-glow);
+}
+
+.btn-save-memory {
+  background: var(--orange-glow);
+  border: none;
+  color: var(--bg-deep);
+}
+
+.btn-delete {
+  background: transparent;
+  border: 1px solid #dc2626;
+  color: #dc2626;
+}
+
+.btn-delete:hover {
+  background: #dc2626;
+  color: white;
 }
 
 /* Settings Panel */
@@ -270,7 +407,7 @@ header h1 {
   left: 0;
   right: 0;
   bottom: 0;
-  background: #1a1a2e;
+  background: var(--bg-deep);
   z-index: 100;
   padding: 16px;
   display: flex;
@@ -289,7 +426,10 @@ header h1 {
 }
 
 .settings-header h2 {
+  font-family: 'JetBrains Mono', monospace;
   font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
 }
 
 .settings-content {
@@ -305,26 +445,34 @@ header h1 {
 }
 
 .setting-group label {
-  font-size: 12px;
-  color: #888;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 1px;
 }
 
 .setting-group input,
 .setting-group select {
   padding: 10px 12px;
-  background: #16213e;
-  border: 1px solid #2a2a4a;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
   border-radius: 8px;
-  color: #fff;
+  color: var(--text-primary);
   font-size: 14px;
+  font-family: 'Inter', sans-serif;
 }
 
 .setting-group input:focus,
 .setting-group select:focus {
   outline: none;
-  border-color: #7c3aed;
+  border-color: var(--orange-glow);
+  box-shadow: 0 0 0 2px rgba(255, 107, 44, 0.15);
+}
+
+.setting-group select {
+  cursor: pointer;
 }
 
 .memory-actions {
@@ -351,10 +499,10 @@ header h1 {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #3a3a5a;
+  background: var(--border);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #4a4a6a;
+  background: var(--orange-dim);
 }

@@ -53,7 +53,9 @@ class PromptBroadcaster {
       'GET_MEMORIES': () => this.getMemories(),
       'GET_CONVERSATIONS': () => this.getConversations(),
       'CLEAR_MEMORY': () => this.clearMemory(),
-      'IMPORT_MEMORY': () => this.importMemory(message.data)
+      'IMPORT_MEMORY': () => this.importMemory(message.data),
+      'UPDATE_MEMORY': () => this.updateMemory(message.id, message.summary),
+      'DELETE_MEMORY': () => this.deleteMemory(message.id)
     };
 
     const handler = handlers[message.type];
@@ -242,6 +244,20 @@ class PromptBroadcaster {
   async importMemory(data) {
     if (this.memorySystem && this.isInitialized) {
       await this.memorySystem.importData(data);
+    }
+    return { success: true };
+  }
+
+  async updateMemory(id, summary) {
+    if (this.memorySystem && this.isInitialized) {
+      await this.memorySystem.updateMemory(id, summary);
+    }
+    return { success: true };
+  }
+
+  async deleteMemory(id) {
+    if (this.memorySystem && this.isInitialized) {
+      await this.memorySystem.deleteMemory(id);
     }
     return { success: true };
   }

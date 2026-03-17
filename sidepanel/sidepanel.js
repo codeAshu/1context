@@ -25,6 +25,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   const importFile = document.getElementById('importFile');
   const clearMemoryBtn = document.getElementById('clearMemory');
 
+  // Track memories for editing
+  let currentMemories = [];
+
   // Character count
   promptInput.addEventListener('input', () => {
     charCount.textContent = promptInput.value.length;
@@ -61,11 +64,78 @@ document.addEventListener('DOMContentLoaded', async () => {
   async function loadMemories() {
     try {
       const memories = await chrome.runtime.sendMessage({ type: 'GET_MEMORIES' });
+      currentMemories = memories || [];
 
-      if (memories && memories.length > 0) {
-        memoryList.innerHTML = memories.map(m => `
-          <div class="memory-item">${escapeHtml(m.summary)}</div>
+      if (currentMemories.length > 0) {
+        memoryList.innerHTML = currentMemories.map((m, index) => `
+          <div class="memory-item" data-id="${m.id}" data-index="${index}">
+            <div class="memory-item-content">${escapeHtml(m.summary)}</div>
+            <div class="memory-item-actions">
+              <button class="btn-edit" data-action="edit">Edit</button>
+              <button class="btn-save-memory hidden" data-action="save">Save</button>
+              <button class="btn-delete" data-action="delete">Delete</button>
+            </div>
+          </div>
         `).join('');
+
+        // Add event listeners for memory actions
+        memoryList.querySelectorAll('.memory-item').forEach(item => {
+          const contentEl = item.querySelector('.memory-item-content');
+          const editBtn = item.querySelector('[data-action="edit"]');
+          const saveBtn = item.querySelector('[data-action="save"]');
+          const deleteBtn = item.querySelector('[data-action="delete"]');
+
+          editBtn.addEventListener('click', () => {
+            item.classList.add('editing');
+            contentEl.contentEditable = true;
+            contentEl.focus();
+            editBtn.classList.add('hidden');
+            saveBtn.classList.remove('hidden');
+          });
+
+          saveBtn.addEventListener('click', async () => {
+            const memoryId = item.dataset.id;
+            const newSummary = contentEl.textContent.trim();
+
+            if (newSummary) {
+              await chrome.runtime.sendMessage({
+                type: 'UPDATE_MEMORY',
+                id: memoryId,
+                summary: newSummary
+              });
+            }
+
+            item.classList.remove('editing');
+            contentEl.contentEditable = false;
+            editBtn.classList.remove('hidden');
+            saveBtn.classList.add('hidden');
+            loadMemories();
+          });
+
+          deleteBtn.addEventListener('click', async () => {
+            const memoryId = item.dataset.id;
+            await chrome.runtime.sendMessage({
+              type: 'DELETE_MEMORY',
+              id: memoryId
+            });
+            loadStatus();
+            loadMemories();
+          });
+
+          // Save on Enter, cancel on Escape
+          contentEl.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              saveBtn.click();
+            } else if (e.key === 'Escape') {
+              item.classList.remove('editing');
+              contentEl.contentEditable = false;
+              editBtn.classList.remove('hidden');
+              saveBtn.classList.add('hidden');
+              loadMemories(); // Reset content
+            }
+          });
+        });
       } else {
         memoryList.innerHTML = '<p class="empty">No memories yet. Start chatting to build context.</p>';
       }
@@ -133,13 +203,28 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  // Settings: Save API Key
+  // Settings: Save API Key with state feedback
   saveApiKeyBtn.addEventListener('click', async () => {
     const key = apiKeyInput.value.trim();
-    if (key) {
+    if (key && !key.includes('•')) {
+      const originalText = saveApiKeyBtn.textContent;
+      saveApiKeyBtn.disabled = true;
+
       await chrome.runtime.sendMessage({ type: 'SET_API_KEY', apiKey: key });
+
+      // Show saved state
+      saveApiKeyBtn.textContent = 'Saved!';
+      saveApiKeyBtn.classList.add('saved');
       apiKeyInput.value = '••••••••••••••••';
+
       loadStatus();
+
+      // Reset button after delay
+      setTimeout(() => {
+        saveApiKeyBtn.textContent = originalText;
+        saveApiKeyBtn.classList.remove('saved');
+        saveApiKeyBtn.disabled = false;
+      }, 2000);
     }
   });
 
@@ -161,6 +246,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Export memory
   exportMemoryBtn.addEventListener('click', async () => {
+    const originalText = exportMemoryBtn.textContent;
+    exportMemoryBtn.disabled = true;
+
     try {
       const [conversations, memories] = await Promise.all([
         chrome.runtime.sendMessage({ type: 'GET_CONVERSATIONS' }),
@@ -178,11 +266,22 @@ document.addEventListener('DOMContentLoaded', async () => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `prompt-broadcaster-memory-${new Date().toISOString().split('T')[0]}.json`;
+      a.download = `1context-memory-${new Date().toISOString().split('T')[0]}.json`;
       a.click();
       URL.revokeObjectURL(url);
+
+      // Show success state
+      exportMemoryBtn.textContent = 'Exported!';
+      exportMemoryBtn.classList.add('saved');
+
+      setTimeout(() => {
+        exportMemoryBtn.textContent = originalText;
+        exportMemoryBtn.classList.remove('saved');
+        exportMemoryBtn.disabled = false;
+      }, 2000);
     } catch (error) {
       console.error('Export failed:', error);
+      exportMemoryBtn.disabled = false;
     }
   });
 
@@ -195,6 +294,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     const file = event.target.files[0];
     if (!file) return;
 
+    const originalText = importMemoryBtn.textContent;
+    importMemoryBtn.disabled = true;
+
     try {
       const text = await file.text();
       const data = JSON.parse(text);
@@ -204,10 +306,22 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
 
       await chrome.runtime.sendMessage({ type: 'IMPORT_MEMORY', data });
+
+      // Show success state
+      importMemoryBtn.textContent = 'Imported!';
+      importMemoryBtn.classList.add('saved');
+
       loadStatus();
       loadMemories();
+
+      setTimeout(() => {
+        importMemoryBtn.textContent = originalText;
+        importMemoryBtn.classList.remove('saved');
+        importMemoryBtn.disabled = false;
+      }, 2000);
     } catch (error) {
       console.error('Import failed:', error);
+      importMemoryBtn.disabled = false;
     }
 
     importFile.value = '';
