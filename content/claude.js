@@ -3,6 +3,11 @@
 (function() {
   'use strict';
 
+  // Check if extension context is still valid
+  function isExtensionContextValid() {
+    return typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id;
+  }
+
   // Selectors for Claude UI elements
   const SELECTORS = {
     textarea: '[contenteditable="true"].ProseMirror, div[contenteditable="true"]',
@@ -56,6 +61,11 @@
   }
 
   async function checkForPendingPrompt() {
+    if (!isExtensionContextValid()) {
+      console.log('1Context: Extension context invalidated, skipping pending prompt check');
+      return;
+    }
+
     try {
       const response = await chrome.runtime.sendMessage({ type: 'GET_PENDING_PROMPT' });
 
@@ -94,7 +104,11 @@
         await chrome.runtime.sendMessage({ type: 'CLEAR_PENDING_PROMPT' });
       }
     } catch (error) {
-      console.error('Prompt Broadcaster: Claude error', error);
+      if (error.message?.includes('Extension context invalidated')) {
+        console.log('1Context: Extension was reloaded, please refresh the page');
+      } else {
+        console.error('1Context: Claude error', error);
+      }
     }
   }
 

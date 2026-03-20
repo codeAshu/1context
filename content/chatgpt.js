@@ -8,6 +8,11 @@
   let isProcessing = false;
   let hasbroadcastedFirst = false; // Track if first message was already broadcast
 
+  // Check if extension context is still valid
+  function isExtensionContextValid() {
+    return typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id;
+  }
+
   function getTextarea() {
     // ChatGPT uses a contenteditable div with id="prompt-textarea"
     const selectors = [
@@ -127,6 +132,11 @@
 
   // Check for pending prompt from side panel broadcast
   async function checkForPendingPrompt() {
+    if (!isExtensionContextValid()) {
+      console.log('1Context: Extension context invalidated, skipping pending prompt check');
+      return;
+    }
+
     try {
       const response = await chrome.runtime.sendMessage({ type: 'GET_PENDING_PROMPT' });
 
@@ -168,12 +178,22 @@
         hasbroadcastedFirst = true;
       }
     } catch (error) {
-      console.error('1Context: ChatGPT pending prompt error', error);
+      if (error.message?.includes('Extension context invalidated')) {
+        console.log('1Context: Extension was reloaded, please refresh the page');
+      } else {
+        console.error('1Context: ChatGPT pending prompt error', error);
+      }
     }
   }
 
   async function handleSubmit(event) {
     console.log('1Context: handleSubmit called, isProcessing:', isProcessing, 'hasbroadcastedFirst:', hasbroadcastedFirst);
+
+    // Skip if extension context is invalidated (extension was reloaded)
+    if (!isExtensionContextValid()) {
+      console.log('1Context: Extension context invalidated, allowing normal submission');
+      return;
+    }
 
     // Skip if already processing or first message was already broadcast
     if (isProcessing || hasbroadcastedFirst) {
@@ -234,7 +254,11 @@
         if (sendButton) sendButton.click();
       }
     } catch (error) {
-      console.error('1Context error:', error);
+      if (error.message?.includes('Extension context invalidated')) {
+        console.log('1Context: Extension was reloaded, please refresh the page');
+      } else {
+        console.error('1Context error:', error);
+      }
       hasbroadcastedFirst = true; // Still mark as done to avoid repeated attempts
       const sendButton = getSendButton();
       if (sendButton) sendButton.click();
