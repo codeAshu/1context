@@ -43,10 +43,10 @@ class PromptBroadcaster {
     await this.ensureReady();
 
     const handlers = {
-      'BROADCAST_PROMPT': () => this.broadcast(message.prompt),
-      'BROADCAST_SPLIT': () => this.broadcastSplit(message.prompt, message.layout),
-      'GET_PENDING_PROMPT': () => this.getPendingPrompt(),
-      'CLEAR_PENDING_PROMPT': () => this.clearPendingPrompt(),
+      'BROADCAST_PROMPT': () => this.broadcast(message.prompt, message.systemPrompt),
+      'BROADCAST_SPLIT': () => this.broadcastSplit(message.prompt, message.layout, message.systemPrompt, message.enhanceAll),
+      'GET_PENDING_PROMPT': () => this.getPendingPrompt(sender),
+      'CLEAR_PENDING_PROMPT': () => this.clearPendingPrompt(sender),
       'SET_API_KEY': () => this.setApiKey(message.apiKey),
       'SET_ENABLED': () => this.setEnabled(message.enabled),
       'GET_STATUS': () => this.getStatus(),
@@ -67,36 +67,48 @@ class PromptBroadcaster {
     return handler();
   }
 
-  async broadcast(originalPrompt) {
+  async broadcast(originalPrompt, systemPrompt = '') {
     if (!this.isEnabled) {
       return { improved: originalPrompt, broadcasted: false };
     }
 
     try {
-      const improvedPrompt = await this.improveAndSave(originalPrompt);
-      await chrome.storage.local.set({ pendingPrompt: improvedPrompt });
+      const enhancedPrompt = await this.improveAndSave(originalPrompt, systemPrompt);
+
+      // Store both original and enhanced prompts
+      await chrome.storage.local.set({
+        pendingPromptOriginal: originalPrompt,
+        pendingPromptEnhanced: enhancedPrompt
+      });
 
       await Promise.all([
         chrome.tabs.create({ url: 'https://gemini.google.com/app', active: false }),
         chrome.tabs.create({ url: 'https://claude.ai/new', active: false })
       ]);
 
-      return { improved: improvedPrompt, broadcasted: true };
+      return { improved: enhancedPrompt, broadcasted: true };
     } catch (error) {
       console.error('Broadcast error:', error);
       return { improved: originalPrompt, broadcasted: false, error: error.message };
     }
   }
 
-  async broadcastSplit(originalPrompt, layout = 'grid') {
+  async broadcastSplit(originalPrompt, layout = 'grid', systemPrompt = '', enhanceAll = false) {
     try {
-      const improvedPrompt = await this.improveAndSave(originalPrompt);
-      await chrome.storage.local.set({ pendingPrompt: improvedPrompt });
+      // Enhance prompt
+      const enhancedPrompt = await this.improveAndSave(originalPrompt, systemPrompt);
 
-      const currentWindow = await chrome.windows.getCurrent();
-      const screenWidth = currentWindow.width || 1920;
-      const screenHeight = currentWindow.height || 1080;
-      const positions = this.calculatePositions(layout, screenWidth, screenHeight);
+      // Store prompts based on enhanceAll flag
+      // If enhanceAll is true (from sidepanel), ALL platforms get enhanced prompt
+      // If false (from ChatGPT interception), ChatGPT gets original, others get enhanced
+      await chrome.storage.local.set({
+        pendingPromptOriginal: enhanceAll ? enhancedPrompt : originalPrompt,
+        pendingPromptEnhanced: enhancedPrompt
+      });
+
+      // Get screen dimensions for proper grid layout
+      const screen = await this.getScreenDimensions();
+      const positions = this.calculatePositions(layout, screen.width, screen.height);
 
       const urls = [
         'https://chatgpt.com/',
@@ -113,19 +125,39 @@ class PromptBroadcaster {
         })
       ));
 
-      return { improved: improvedPrompt, broadcasted: true };
+      return { improved: enhancedPrompt, broadcasted: true };
     } catch (error) {
       console.error('BroadcastSplit error:', error);
       return { improved: originalPrompt, broadcasted: false, error: error.message };
     }
   }
 
-  async improveAndSave(originalPrompt) {
+  async getScreenDimensions() {
+    try {
+      // Try to get display info
+      const displays = await chrome.system.display.getInfo();
+      if (displays && displays.length > 0) {
+        const primary = displays.find(d => d.isPrimary) || displays[0];
+        return {
+          width: primary.workArea.width,
+          height: primary.workArea.height,
+          left: primary.workArea.left,
+          top: primary.workArea.top
+        };
+      }
+    } catch (e) {
+      console.log('Could not get display info, using defaults');
+    }
+    // Fallback to reasonable defaults
+    return { width: 1920, height: 1080, left: 0, top: 0 };
+  }
+
+  async improveAndSave(originalPrompt, customSystemPrompt = '') {
     let improved = originalPrompt;
 
     if (this.memorySystem && this.openaiClient && this.isInitialized) {
       const context = await this.memorySystem.getMemoryContext();
-      improved = await this.openaiClient.improvePrompt(originalPrompt, context);
+      improved = await this.openaiClient.improvePrompt(originalPrompt, context, customSystemPrompt);
       await this.memorySystem.saveConversation(originalPrompt);
 
       if (await this.memorySystem.needsDistillation()) {
@@ -149,43 +181,63 @@ class PromptBroadcaster {
     }
   }
 
-  calculatePositions(layout, width, height) {
+  calculatePositions(layout, width, height, offsetLeft = 0, offsetTop = 0) {
     switch (layout) {
       case 'vertical': {
+        // 3 windows stacked vertically
         const h = Math.floor(height / 3);
         return [
-          { left: 0, top: 0, width, height: h },
-          { left: 0, top: h, width, height: h },
-          { left: 0, top: h * 2, width, height: h }
+          { left: offsetLeft, top: offsetTop, width, height: h },
+          { left: offsetLeft, top: offsetTop + h, width, height: h },
+          { left: offsetLeft, top: offsetTop + h * 2, width, height: h }
         ];
       }
       case 'grid': {
+        // 2x2 grid with 3 windows (top-left, top-right, bottom-left)
         const hw = Math.floor(width / 2);
         const hh = Math.floor(height / 2);
         return [
-          { left: 0, top: 0, width: hw, height: hh },
-          { left: hw, top: 0, width: hw, height: hh },
-          { left: 0, top: hh, width: hw, height: hh }
+          { left: offsetLeft, top: offsetTop, width: hw, height: hh },           // ChatGPT: top-left
+          { left: offsetLeft + hw, top: offsetTop, width: hw, height: hh },      // Claude: top-right
+          { left: offsetLeft, top: offsetTop + hh, width: hw, height: hh }       // Gemini: bottom-left
         ];
       }
-      default: { // horizontal
+      default: { // horizontal - 3 windows side by side
         const w = Math.floor(width / 3);
         return [
-          { left: 0, top: 0, width: w, height },
-          { left: w, top: 0, width: w, height },
-          { left: w * 2, top: 0, width: w, height }
+          { left: offsetLeft, top: offsetTop, width: w, height },
+          { left: offsetLeft + w, top: offsetTop, width: w, height },
+          { left: offsetLeft + w * 2, top: offsetTop, width: w, height }
         ];
       }
     }
   }
 
-  async getPendingPrompt() {
-    const result = await chrome.storage.local.get(['pendingPrompt']);
-    return { prompt: result.pendingPrompt || null };
+  async getPendingPrompt(sender) {
+    const result = await chrome.storage.local.get(['pendingPromptOriginal', 'pendingPromptEnhanced']);
+
+    // Determine which prompt to return based on the sender's URL
+    const url = sender?.tab?.url || '';
+    const isChatGPT = url.includes('chatgpt.com') || url.includes('chat.openai.com');
+
+    // ChatGPT gets original prompt, Claude/Gemini get enhanced
+    const prompt = isChatGPT
+      ? result.pendingPromptOriginal
+      : result.pendingPromptEnhanced;
+
+    return { prompt: prompt || null };
   }
 
-  async clearPendingPrompt() {
-    await chrome.storage.local.remove(['pendingPrompt']);
+  async clearPendingPrompt(sender) {
+    const url = sender?.tab?.url || '';
+    const isChatGPT = url.includes('chatgpt.com') || url.includes('chat.openai.com');
+
+    // Clear only the prompt that was used
+    if (isChatGPT) {
+      await chrome.storage.local.remove(['pendingPromptOriginal']);
+    } else {
+      await chrome.storage.local.remove(['pendingPromptEnhanced']);
+    }
     return { success: true };
   }
 

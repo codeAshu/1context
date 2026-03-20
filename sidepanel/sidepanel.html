@@ -20,7 +20,7 @@
 
     <section class="prompt-section">
       <div class="prompt-input-wrapper">
-        <textarea id="promptInput" placeholder="Enter your prompt here...&#10;&#10;It will be improved and sent to all AI models."></textarea>
+        <textarea id="promptInput" placeholder="Enter your prompt here...&#10;&#10;Enhanced prompt sent to all AI platforms."></textarea>
         <div class="char-count"><span id="charCount">0</span> chars</div>
       </div>
 
@@ -51,9 +51,9 @@
     </section>
 
     <section class="memory-section">
-      <h2>Memory Context</h2>
-      <div id="memoryList" class="memory-list">
-        <p class="empty">No memories yet. Start chatting to build context.</p>
+      <h2>Recent Conversations</h2>
+      <div id="conversationList" class="memory-list">
+        <p class="empty">No conversations yet. Start chatting to build context.</p>
       </div>
     </section>
 
@@ -82,6 +82,12 @@
             <option value="horizontal">Side by side (horizontal)</option>
             <option value="vertical">Stacked (vertical)</option>
           </select>
+        </div>
+
+        <div class="setting-group">
+          <label for="systemPrompt">Enhancement System Prompt</label>
+          <textarea id="systemPrompt" rows="6"></textarea>
+          <button id="resetSystemPrompt" class="btn-secondary">Reset to Default</button>
         </div>
 
         <div class="setting-group">

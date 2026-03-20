@@ -6,6 +6,7 @@
   console.log('1Context: ChatGPT content script loaded');
 
   let isProcessing = false;
+  let hasbroadcastedFirst = false; // Track if first message was already broadcast
 
   function getTextarea() {
     // ChatGPT uses a contenteditable div with id="prompt-textarea"
@@ -162,8 +163,9 @@
           }
         }
 
-        // Clear the pending prompt
+        // Clear the pending prompt and mark first message as done
         await chrome.runtime.sendMessage({ type: 'CLEAR_PENDING_PROMPT' });
+        hasbroadcastedFirst = true;
       }
     } catch (error) {
       console.error('1Context: ChatGPT pending prompt error', error);
@@ -171,10 +173,11 @@
   }
 
   async function handleSubmit(event) {
-    console.log('1Context: handleSubmit called, isProcessing:', isProcessing);
+    console.log('1Context: handleSubmit called, isProcessing:', isProcessing, 'hasbroadcastedFirst:', hasbroadcastedFirst);
 
-    if (isProcessing) {
-      console.log('1Context: Already processing, skipping');
+    // Skip if already processing or first message was already broadcast
+    if (isProcessing || hasbroadcastedFirst) {
+      console.log('1Context: Skipping - already processed or first message sent');
       return;
     }
 
@@ -199,26 +202,31 @@
     isProcessing = true;
 
     try {
-      console.log('1Context: Sending to background...');
+      console.log('1Context: Broadcasting first message to all platforms...');
+
+      // Get system prompt from storage
+      const storage = await chrome.storage.local.get(['systemPrompt']);
+      const systemPrompt = storage.systemPrompt || '';
 
       const response = await chrome.runtime.sendMessage({
         type: 'BROADCAST_PROMPT',
-        prompt: originalPrompt
+        prompt: originalPrompt,
+        systemPrompt: systemPrompt
       });
 
       console.log('1Context: Got response', response);
 
-      if (response && response.improved) {
-        setPromptText(textarea, response.improved);
+      // Mark first message as broadcast - subsequent messages won't be intercepted
+      hasbroadcastedFirst = true;
+
+      if (response && response.broadcasted) {
+        // Submit original prompt to ChatGPT (not enhanced)
         await new Promise(resolve => setTimeout(resolve, 200));
 
         const sendButton = getSendButton();
-        console.log('1Context: Send button found:', !!sendButton);
-
         if (sendButton && !sendButton.disabled) {
-          isProcessing = true;
           sendButton.click();
-          console.log('1Context: Clicked send button');
+          console.log('1Context: ChatGPT prompt submitted, Claude/Gemini windows opened');
         }
       } else if (response && response.error) {
         console.error('1Context: Error from background', response.error);
@@ -227,6 +235,7 @@
       }
     } catch (error) {
       console.error('1Context error:', error);
+      hasbroadcastedFirst = true; // Still mark as done to avoid repeated attempts
       const sendButton = getSendButton();
       if (sendButton) sendButton.click();
     } finally {
@@ -273,29 +282,10 @@
     // Check for pending prompt first (from side panel broadcast)
     setTimeout(checkForPendingPrompt, 2000);
 
-    // Set up interception for manual submissions
-    const observer = new MutationObserver((mutations, obs) => {
-      const textarea = getTextarea();
-      if (textarea) {
-        obs.disconnect();
-        setupInterception();
-        console.log('1Context: ChatGPT interception active');
-      }
-    });
-
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true
-    });
-
-    const textarea = getTextarea();
-    if (textarea) {
-      observer.disconnect();
-      setupInterception();
-      console.log('1Context: ChatGPT interception active (immediate)');
-    } else {
-      console.log('1Context: Waiting for textarea to appear...');
-    }
+    // Set up interception for first message typed directly on ChatGPT
+    // Only the first message is broadcast to Claude/Gemini
+    // Subsequent messages go only to ChatGPT
+    setupInterception();
   }
 
   if (document.readyState === 'loading') {

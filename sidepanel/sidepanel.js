@@ -1,5 +1,10 @@
 // Side Panel UI logic
 
+// Default system prompt for enhancement
+const DEFAULT_SYSTEM_PROMPT = `You are an expert prompt engineer. Improve the user's prompt to be clearer, more specific, and more likely to get a helpful response.
+
+IMPORTANT: Return ONLY the improved prompt. No explanations, no quotes, no prefixes.`;
+
 document.addEventListener('DOMContentLoaded', async () => {
   // Elements
   const promptInput = document.getElementById('promptInput');
@@ -11,7 +16,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const convCount = document.getElementById('convCount');
   const previewSection = document.getElementById('previewSection');
   const improvedPrompt = document.getElementById('improvedPrompt');
-  const memoryList = document.getElementById('memoryList');
+  const conversationList = document.getElementById('conversationList');
 
   // Settings elements
   const settingsBtn = document.getElementById('settingsBtn');
@@ -20,13 +25,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   const apiKeyInput = document.getElementById('apiKey');
   const saveApiKeyBtn = document.getElementById('saveApiKey');
   const windowLayout = document.getElementById('windowLayout');
+  const systemPromptInput = document.getElementById('systemPrompt');
+  const resetSystemPromptBtn = document.getElementById('resetSystemPrompt');
   const exportMemoryBtn = document.getElementById('exportMemory');
   const importMemoryBtn = document.getElementById('importMemory');
   const importFile = document.getElementById('importFile');
   const clearMemoryBtn = document.getElementById('clearMemory');
-
-  // Track memories for editing
-  let currentMemories = [];
 
   // Character count
   promptInput.addEventListener('input', () => {
@@ -61,87 +65,44 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  async function loadMemories() {
-    try {
-      const memories = await chrome.runtime.sendMessage({ type: 'GET_MEMORIES' });
-      currentMemories = memories || [];
+  // Summarize text to max 2 lines (~100 chars)
+  function summarize(text, maxLength = 100) {
+    if (!text) return '';
+    const clean = text.replace(/\s+/g, ' ').trim();
+    if (clean.length <= maxLength) return clean;
+    return clean.substring(0, maxLength - 3) + '...';
+  }
 
-      if (currentMemories.length > 0) {
-        memoryList.innerHTML = currentMemories.map((m, index) => `
-          <div class="memory-item" data-id="${m.id}" data-index="${index}">
-            <div class="memory-item-content">${escapeHtml(m.summary)}</div>
-            <div class="memory-item-actions">
-              <button class="btn-edit" data-action="edit">Edit</button>
-              <button class="btn-save-memory hidden" data-action="save">Save</button>
-              <button class="btn-delete" data-action="delete">Delete</button>
-            </div>
+  async function loadConversations() {
+    try {
+      const conversations = await chrome.runtime.sendMessage({ type: 'GET_CONVERSATIONS' });
+      const convs = conversations || [];
+
+      if (convs.length > 0) {
+        conversationList.innerHTML = convs.slice(0, 10).map((c, index) => `
+          <div class="conversation-item">
+            <div class="conversation-summary">${escapeHtml(summarize(c.prompt))}</div>
+            <div class="conversation-time">${formatTime(c.timestamp)}</div>
           </div>
         `).join('');
-
-        // Add event listeners for memory actions
-        memoryList.querySelectorAll('.memory-item').forEach(item => {
-          const contentEl = item.querySelector('.memory-item-content');
-          const editBtn = item.querySelector('[data-action="edit"]');
-          const saveBtn = item.querySelector('[data-action="save"]');
-          const deleteBtn = item.querySelector('[data-action="delete"]');
-
-          editBtn.addEventListener('click', () => {
-            item.classList.add('editing');
-            contentEl.contentEditable = true;
-            contentEl.focus();
-            editBtn.classList.add('hidden');
-            saveBtn.classList.remove('hidden');
-          });
-
-          saveBtn.addEventListener('click', async () => {
-            const memoryId = item.dataset.id;
-            const newSummary = contentEl.textContent.trim();
-
-            if (newSummary) {
-              await chrome.runtime.sendMessage({
-                type: 'UPDATE_MEMORY',
-                id: memoryId,
-                summary: newSummary
-              });
-            }
-
-            item.classList.remove('editing');
-            contentEl.contentEditable = false;
-            editBtn.classList.remove('hidden');
-            saveBtn.classList.add('hidden');
-            loadMemories();
-          });
-
-          deleteBtn.addEventListener('click', async () => {
-            const memoryId = item.dataset.id;
-            await chrome.runtime.sendMessage({
-              type: 'DELETE_MEMORY',
-              id: memoryId
-            });
-            loadStatus();
-            loadMemories();
-          });
-
-          // Save on Enter, cancel on Escape
-          contentEl.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              saveBtn.click();
-            } else if (e.key === 'Escape') {
-              item.classList.remove('editing');
-              contentEl.contentEditable = false;
-              editBtn.classList.remove('hidden');
-              saveBtn.classList.add('hidden');
-              loadMemories(); // Reset content
-            }
-          });
-        });
       } else {
-        memoryList.innerHTML = '<p class="empty">No memories yet. Start chatting to build context.</p>';
+        conversationList.innerHTML = '<p class="empty">No conversations yet. Start chatting to build context.</p>';
       }
     } catch (error) {
-      console.error('Failed to load memories:', error);
+      console.error('Failed to load conversations:', error);
     }
+  }
+
+  function formatTime(timestamp) {
+    if (!timestamp) return '';
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diff = now - date;
+
+    if (diff < 60000) return 'Just now';
+    if (diff < 3600000) return Math.floor(diff / 60000) + 'm ago';
+    if (diff < 86400000) return Math.floor(diff / 3600000) + 'h ago';
+    return date.toLocaleDateString();
   }
 
   // Broadcast functionality
@@ -155,14 +116,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     statusDot.classList.add('processing');
 
     try {
-      // Get layout preference
-      const layout = windowLayout.value;
+      // Get layout preference and system prompt from storage
+      const storage = await chrome.storage.local.get(['windowLayout', 'systemPrompt']);
+      const layout = storage.windowLayout || 'grid';
+      const systemPrompt = storage.systemPrompt || DEFAULT_SYSTEM_PROMPT;
 
-      // Send broadcast request
+      // Send broadcast request - enhanced prompt goes to ALL platforms
       const response = await chrome.runtime.sendMessage({
         type: 'BROADCAST_SPLIT',
         prompt: prompt,
-        layout: layout
+        layout: layout,
+        systemPrompt: systemPrompt,
+        enhanceAll: true  // Flag to enhance for all platforms
       });
 
       if (response && response.improved) {
@@ -179,7 +144,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Refresh stats
         loadStatus();
-        loadMemories();
+        loadConversations();
       } else if (response && response.error) {
         statusText.textContent = 'Error: ' + response.error;
         statusDot.classList.add('error');
@@ -228,20 +193,33 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  // Load API key on settings open
+  // Load settings on settings open
   settingsBtn.addEventListener('click', async () => {
-    const result = await chrome.storage.local.get(['openaiApiKey', 'windowLayout']);
+    const result = await chrome.storage.local.get(['openaiApiKey', 'windowLayout', 'systemPrompt']);
     if (result.openaiApiKey) {
       apiKeyInput.value = '••••••••••••••••';
     }
     if (result.windowLayout) {
       windowLayout.value = result.windowLayout;
     }
+    // Load system prompt or show default
+    systemPromptInput.value = result.systemPrompt || DEFAULT_SYSTEM_PROMPT;
   });
 
   // Save layout preference
   windowLayout.addEventListener('change', async () => {
     await chrome.storage.local.set({ windowLayout: windowLayout.value });
+  });
+
+  // Save system prompt when changed
+  systemPromptInput.addEventListener('input', async () => {
+    await chrome.storage.local.set({ systemPrompt: systemPromptInput.value });
+  });
+
+  // Reset system prompt to default
+  resetSystemPromptBtn.addEventListener('click', async () => {
+    systemPromptInput.value = DEFAULT_SYSTEM_PROMPT;
+    await chrome.storage.local.set({ systemPrompt: DEFAULT_SYSTEM_PROMPT });
   });
 
   // Export memory
@@ -312,7 +290,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       importMemoryBtn.classList.add('saved');
 
       loadStatus();
-      loadMemories();
+      loadConversations();
 
       setTimeout(() => {
         importMemoryBtn.textContent = originalText;
@@ -332,7 +310,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (confirm('Clear all memory and history?')) {
       await chrome.runtime.sendMessage({ type: 'CLEAR_MEMORY' });
       loadStatus();
-      loadMemories();
+      loadConversations();
     }
   });
 
@@ -344,5 +322,5 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Initialize
   loadStatus();
-  loadMemories();
+  loadConversations();
 });
